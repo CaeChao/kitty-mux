@@ -48,7 +48,6 @@ class TabSwitcher(Handler):
             os_windows = json.loads(res)
             active_window = next(w for w in os_windows if w['is_active'])
             self.tabs = active_window['tabs']
-            self.options_num = len(active_window['tabs'])
             active_tab = next(t for t in self.tabs if t['is_active'])
             self.selected_tab_idx = self.tabs.index(active_tab)
             cmds = []
@@ -87,10 +86,8 @@ class TabSwitcher(Handler):
         if key_event.key == 'l':
             if self.selected_entry_type == 'tab':
                 tab = self.tabs[self.selected_tab_idx]
-                wins_num = len(tab['windows'])
-                display_wins_num = wins_num - \
-                    1 if tab['is_active'] else wins_num
-                if not tab.get('expanded') and display_wins_num > 1:
+                wins_num = len([w for w in tab['windows'] if w['at_prompt']])
+                if not tab.get('expanded') and wins_num > 1:
                     tab['expanded'] = True
                     self.draw_screen()
             return
@@ -161,8 +158,9 @@ class TabSwitcher(Handler):
             if tab['is_active']:
                 self.quit_loop(0)
                 return
-            window_id = next(w for w in windows if w['is_active'] or w['is_focused'])['id']
-        else: 
+            window_id = next(
+                w for w in windows if w['is_active'] or w['is_focused'])['id']
+        else:
             window_id = windows[self.selected_win_idx]['id']
         focus_window = create_basic_command(
             'focus_window', {'match': f'id:{window_id}'}, no_response=True)
@@ -172,31 +170,36 @@ class TabSwitcher(Handler):
     def draw_screen(self) -> None:
         entry_num = 0
         self.cmd.clear_screen()
-        print = self.print
+        draw = self.print
         if not self.tabs:
             return
         for i, tab in enumerate(self.tabs):
             entry_num += 1
             tid = tab['id']
+            active_arrow = ' '
+            active_group = []
+            if tab['is_active']:
+                active_arrow = '➜'
+                active_group = next(g for g in tab['groups'] if len(
+                    g['windows']) > 1)['windows']
             windows = [w for w in tab['windows'] if w['at_prompt']]
             wins_num = len(windows)
-            active_arrow = '➜' if tab['is_active'] else ' '
             expanded = tab.get('expanded')
             expand_icon = ' ' if wins_num <= 1 else '' if expanded else ''
             tab_name = f'({i+1}) {active_arrow} {tab["title"]} - {wins_num} windows {expand_icon}'
             if self.selected_entry_type == 'tab' and i == self.selected_tab_idx:
-                print(styled(tab_name, bg='gray', fg='blue'))
+                draw(styled(tab_name, bg='gray', fg='blue'))
             else:
-                print(tab_name)
+                draw(tab_name)
             if expanded:
                 for n, w in enumerate(windows):
                     entry_num += 1
-                    active_window = '➜' if w['is_active'] else ' '
+                    active_window = active_arrow if w['id'] in active_group else ' '
                     win_name = f'    {active_window} {n+1}: {w["title"]}'
                     if self.selected_entry_type == 'win' and n == self.selected_win_idx:
-                        print(styled(win_name, bg='gray', fg='blue'))
+                        draw(styled(win_name, bg='gray', fg='blue'))
                     else:
-                        print(win_name)
+                        draw(win_name)
 
         # don't draw anything if we have nothing to show, otherwise we can see the borders for
         # a couple of ms. this is an approximation since we might get some text data for another
@@ -206,14 +209,14 @@ class TabSwitcher(Handler):
 
         wins_by_selected_tab = [
             w for w in self.tabs[self.selected_tab_idx]['windows'] if w['at_prompt']]
-        wins_to_display = wins_by_selected_tab[self.selected_win_idx] if self.selected_entry_type == 'win' else list(
+        wins_to_display = [wins_by_selected_tab[self.selected_win_idx]] if self.selected_entry_type == 'win' else list(
             islice(wins_by_selected_tab, 0, 4))
         wins_num = len(wins_to_display)
         win_height = math.floor(self.screen_size.rows / 2 - 2)
 
         # 2 for borders, 1 for the tab_bar
         for _ in range(self.screen_size.rows - entry_num - win_height - 2 - 1):
-            print('')
+            draw('')
 
         def print_horizontal_border(left_corner: str, middle_corner: str, right_corner: str):
             border = left_corner
@@ -224,7 +227,7 @@ class TabSwitcher(Handler):
                     border += middle_corner
                 else:
                     border += right_corner
-            print(border)
+            draw(border)
 
         print_horizontal_border('┌', '┬', '┐')
 
@@ -239,8 +242,8 @@ class TabSwitcher(Handler):
             lines_by_win.append(new_line)
 
         for line in zip(*lines_by_win):
-            print('│ ' + '\x1b[0m │ '.join([l.get_raw_text()
-                  for l in line]) + ' \x1b[0m│')
+            draw('│ ' + '\x1b[0m │ '.join([l.get_raw_text()
+                                           for l in line]) + ' \x1b[0m│')
 
         print_horizontal_border('└', '┴', '┘')
 
