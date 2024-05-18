@@ -5,7 +5,6 @@ import re
 from os.path import expanduser
 from itertools import islice
 from typing import List, Dict, Any
-from kitty.boss import Boss
 from kitty.remote_control import create_basic_command, encode_send
 from kitty.typing import KeyEventType
 from kitty.fast_data_types import current_focused_os_window_id
@@ -24,6 +23,7 @@ class TabSwitcher(Handler):
         self.selected_entry_type = 'tab'
         self.cmds = []
         self.windows_text = {}
+        self.last_active_tab = {'id': None, 'layout': None}
 
     def initialize(self) -> None:
         self.cmd.set_cursor_visible(False)
@@ -46,10 +46,21 @@ class TabSwitcher(Handler):
                 return
             res = response.get('data')
             os_windows = json.loads(res)
-            active_window = next(w for w in os_windows if w['is_active'])
-            self.tabs = active_window['tabs']
+            active_os_window = next(w for w in os_windows if w['is_active'])
+            self.tabs = active_os_window['tabs']
             active_tab = next(t for t in self.tabs if t['is_active'])
             self.selected_tab_idx = self.tabs.index(active_tab)
+
+            # change the kitten overlay window to stack layout
+            if active_tab['layout'] != 'stack':
+                self.last_active_tab = {
+                    'id': active_tab['id'],
+                    'layout': active_tab['layout']
+                }
+                goto_stack = create_basic_command(
+                    'goto-layout', {'match': f'id:{active_tab["id"]}', 'layout': "stack"}, no_response=True)
+                self.write(encode_send(goto_stack))
+
             cmds = []
             for tab in self.tabs:
                 for w in tab['windows']:
@@ -59,7 +70,7 @@ class TabSwitcher(Handler):
                     self.write(encode_send(get_text))
                     self.cmds.insert(0, {
                         'type': 'get-text',
-                        'os_window_id': active_window['id'],
+                        'os_window_id': active_os_window['id'],
                         'tab_id': tab['id'],
                         'window_id': wid,
                     })
@@ -73,12 +84,20 @@ class TabSwitcher(Handler):
             self.windows_text[cmd['window_id']] = lines
             self.draw_screen()
 
+    def on_exit(self) -> None:
+        # recover the last layout of the active tab
+        if self.last_active_tab['layout']:
+            goto_stack = create_basic_command(
+                'goto-layout', {'match': f'id:{self.last_active_tab["id"]}', 'layout': f'{self.last_active_tab["layout"]}'}, no_response=True)
+            self.write(encode_send(goto_stack))
+        self.quit_loop(0)
+
     def on_key_event(self, key_event: KeyEventType, in_bracketed_paste: bool = False) -> None:
         if key_event.type == RELEASE:
             return
 
         if key_event.matches('esc') or key_event.key == 'q':
-            self.quit_loop(0)
+            self.on_exit()
 
         if key_event.matches('enter'):
             self.switch_to_entry()
@@ -154,18 +173,21 @@ class TabSwitcher(Handler):
         window_id = None
         tab = self.tabs[self.selected_tab_idx]
         windows = [w for w in tab['windows'] if w['at_prompt']]
+
         if self.selected_entry_type == 'tab':
             if tab['is_active']:
-                self.quit_loop(0)
+                self.on_exit()
                 return
             window_id = next(
                 w for w in windows if w['is_active'] or w['is_focused'])['id']
         else:
             window_id = windows[self.selected_win_idx]['id']
+
         focus_window = create_basic_command(
             'focus_window', {'match': f'id:{window_id}'}, no_response=True)
         self.write(encode_send(focus_window))
-        self.quit_loop(0)
+        self.on_exit()
+
 
     def draw_screen(self) -> None:
         entry_num = 0
