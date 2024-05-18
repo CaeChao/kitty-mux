@@ -188,7 +188,6 @@ class TabSwitcher(Handler):
         self.write(encode_send(focus_window))
         self.on_exit()
 
-
     def draw_screen(self) -> None:
         entry_num = 0
         self.cmd.clear_screen()
@@ -210,16 +209,16 @@ class TabSwitcher(Handler):
             expand_icon = ' ' if wins_num <= 1 else '' if expanded else ''
             tab_name = f'({i+1}) {active_arrow} {tab["title"]} - {wins_num} windows {expand_icon}'
             if self.selected_entry_type == 'tab' and i == self.selected_tab_idx:
-                draw(styled(tab_name, bg='gray', fg='blue'))
+                draw(styled(tab_name, bg=8, fg='blue'))
             else:
                 draw(tab_name)
             if expanded:
                 for n, w in enumerate(windows):
                     entry_num += 1
                     active_window = active_arrow if w['id'] in active_group else ' '
-                    win_name = f'    {active_window} {n+1}: {w["title"]}'
+                    win_name = f'{" "*(len(str(i+1))+ 5)}{active_window} {n+1}: {w["title"]}'
                     if self.selected_entry_type == 'win' and n == self.selected_win_idx:
-                        draw(styled(win_name, bg='gray', fg='blue'))
+                        draw(styled(win_name, bg=8, fg='blue'))
                     else:
                         draw(win_name)
 

@@ -1,32 +1,36 @@
 # Kitty-mux
-A Custom [kitten](https://sw.kovidgoyal.net/kitty/kittens/custom/) to mimic tmux's multiplexer feature: it enables a number of kitty tabs or windows to be created, accessed, and controlled from a single screen.
+A Custom [kitten](https://sw.kovidgoyal.net/kitty/kittens/custom/) to mimic tmux's multiplexer feature: it enables user to navigate, access, and control kitty tabs or windows to from a single screen.
 
 ![](./screenshot.png)
 
 ## Motivation 
-[tmux](https://github.com/tmux/tmux) is very useful as a sessions/windows browser for terminal. However, it's very slow if you do things like opening multiple Neovim instances when running a project, or running an AI model like ollama, even if you combine with a fast terminal like [alacritty](https://github.com/alacritty/alacritty), which doesn't support tabs/windows by itself.
-Therefore, I decided to switch to kitty, and realized that I could customized a kitten to replace tmux.
+[tmux](https://github.com/tmux/tmux) is very useful as a sessions/windows browser for terminal. However, it will become very slow, if you start to do things like opening multiple Neovim instances while running a big project, or just run an AI model like ollama. The [performance](https://github.com/kovidgoyal/kitty) is not very good, even if you run a fast terminal like [alacritty](https://github.com/alacritty/alacritty), which doesn't support tabs/windows by itself.
+Therefore, I decided to switch to [kitty](https://github.com/kovidgoyal/kitty), and realized that I could customized a kitten to replace tmux.
 This is a tool to give kitty the similar features. The idea is to bind a hotkey to run a tabs/windows browser in kitty so that you can jump to known windows with vim-like key bindings.
 
 ## Installation
 
-```shell
+```sh
 git clone git@github.com:CaeChao/kitty-mux.git ~/.config/kitty/kitty-mux
 ```
 
 ## Getting Started
 You'll need to:
 * allow remote control in kitty
-```shell
+
+```conf
 allow_remote_control yes
 ```
 
-* create kitty mappings
+* create kitty mappings in your kitty.conf
 
 For example:
-```shell
+
+```conf
+# ~/.config/kitty/kitty.conf
+
 # Window/Tab management
-map ctrl+a>w kitten kitty-mux/tab_switcher.py # use ctrl+a as prefix + w to list tabs
+map ctrl+a>w kitten kitty-mux/tab_switcher.py # use ctrl+a as prefix + w to trigger kitty-mux
 tab_bar_style hidden
 map ctrl+a>$ set_tab_title " "
 enabled_layouts splits:split_axis=horizontal,stack,grid
@@ -37,7 +41,7 @@ map ctrl+a>z toggle_layout stack
 map ctrl+a>% launch --location=vsplit --cwd=current
 map ctrl+a>shift+' launch --location=hsplit --cwd=current
 map ctrl+a>c launch --type=tab --cwd=current
-map ctrl+a>t  new_tab !neighbor
+map ctrl+a>t new_tab !neighbor
 
 # Movement
 map ctrl+a>h previous_window
