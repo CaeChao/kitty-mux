@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import re
@@ -5,7 +6,7 @@ import re
 from os.path import expanduser
 from itertools import islice
 from typing import List, Dict, Any
-from kitty.remote_control import create_basic_command, encode_send
+from kitty.remote_control import create_basic_command, encode_send, get_pubkey, CommandEncrypter, NoEncryption
 from kitty.typing import KeyEventType
 from kitty.fast_data_types import current_focused_os_window_id
 from kitty.key_encoding import RELEASE
@@ -13,10 +14,19 @@ from kittens.tui.handler import Handler
 from kittens.tui.loop import Loop
 from kittens.tui.operations import styled, repeat
 
+parser = argparse.ArgumentParser(description="kitty-mux")
+parser.add_argument(
+    "--password",
+    dest="password",
+    action="append",
+    default=[],
+    help="remote control password",
+)
 
 class TabSwitcher(Handler):
 
-    def __init__(self):
+    def __init__(self, password: str):
+        v, pubkey = get_pubkey()
         self.tabs = []
         self.selected_tab_idx = -1
         self.selected_win_idx = -1
@@ -24,16 +34,25 @@ class TabSwitcher(Handler):
         self.cmds = []
         self.windows_text = {}
         self.last_active_tab = {'id': None, 'layout': None}
+        self.encrypter = CommandEncrypter(
+            pubkey=pubkey,
+            encryption_version=v,
+            password=password
+        ) if password else NoEncryption()
 
     def initialize(self) -> None:
         self.cmd.set_cursor_visible(False)
         self.draw_screen()
-        ls = create_basic_command('ls', no_response=False)
-        self.write(encode_send(ls))
+        self.send_rc_cmd(name='ls', payload=None, encrypter=self.encrypter,
+                         no_response=False)
         self.cmds.append({'type': 'ls'})
 
-    # this assumes that communication via kitty cmds in synchronous...
+    # send remote control command with password option
+    def send_rc_cmd(self, name: str, payload: Any, encrypter: CommandEncrypter, no_response=True) -> None:
+        send = encrypter(create_basic_command(name, payload, no_response))
+        self.write(encode_send(send))
 
+    # this assumes that communication via kitty cmds in synchronous...
     def on_kitty_cmd_response(self, response: Dict[str, Any]) -> None:
         cmd = self.cmds.pop()
         if cmd['type'] == 'ls':
@@ -57,17 +76,19 @@ class TabSwitcher(Handler):
                     'id': active_tab['id'],
                     'layout': active_tab['layout']
                 }
-                goto_stack = create_basic_command(
-                    'goto-layout', {'match': f'id:{active_tab["id"]}', 'layout': "stack"}, no_response=True)
-                self.write(encode_send(goto_stack))
+                self.send_rc_cmd(
+                    'goto-layout',
+                    {'match': f'id:{active_tab["id"]}', 'layout': "stack"},
+                    self.encrypter,
+                    no_response=True
+                )
 
             cmds = []
             for tab in self.tabs:
                 for w in tab['windows']:
                     wid = w['id']
-                    get_text = create_basic_command(
-                        'get-text', {'match': f'id:{wid}', 'ansi': True}, no_response=False)
-                    self.write(encode_send(get_text))
+                    self.send_rc_cmd(
+                        'get-text', {'match': f'id:{wid}', 'ansi': True}, self.encrypter, no_response=False)
                     self.cmds.insert(0, {
                         'type': 'get-text',
                         'os_window_id': active_os_window['id'],
@@ -87,9 +108,8 @@ class TabSwitcher(Handler):
     def on_exit(self) -> None:
         # recover the last layout of the active tab
         if self.last_active_tab['layout']:
-            goto_stack = create_basic_command(
-                'goto-layout', {'match': f'id:{self.last_active_tab["id"]}', 'layout': f'{self.last_active_tab["layout"]}'}, no_response=True)
-            self.write(encode_send(goto_stack))
+            self.send_rc_cmd(
+                'goto-layout', {'match': f'id:{self.last_active_tab["id"]}', 'layout': f'{self.last_active_tab["layout"]}'}, self.encrypter, no_response=True)
         self.quit_loop(0)
 
     def on_key_event(self, key_event: KeyEventType, in_bracketed_paste: bool = False) -> None:
@@ -356,5 +376,6 @@ def tab_width(cols, tab_count, idx):
 
 def main(args: List[str]) -> str:
     loop = Loop()
-    handler = TabSwitcher()
+    opts = parser.parse_args(args[1:])
+    handler = TabSwitcher(opts.password[0])
     loop.loop(handler)

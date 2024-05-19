@@ -8,14 +8,19 @@ A Custom [kitten](https://sw.kovidgoyal.net/kitty/kittens/custom/) to mimic tmux
 Therefore, I decided to switch to [kitty](https://github.com/kovidgoyal/kitty), and realized that I could customized a kitten to replace tmux.
 This is a tool to give kitty the similar features. The idea is to bind a hotkey to run a tabs/windows browser in kitty so that you can jump to known windows with vim-like key bindings.
 
+
 ## Installation
+
+> [!IMPORTANT]
+> This plugin requires kitty v0.30.0 or higher.
 
 ```sh
 git clone git@github.com:CaeChao/kitty-mux.git ~/.config/kitty/kitty-mux
 ```
 
-## Getting Started
-You'll need to:
+## Configuration
+In order to make this plugin work, You'll need to:
+
 * allow remote control in kitty
 
 ```conf
@@ -24,13 +29,22 @@ allow_remote_control yes
 
 * create kitty mappings in your kitty.conf
 
-For example:
+### Loading projects
+Create a mapping for loading projects. The pattern is:
+
+```conf
+# ~/.config/kitty/kitty.conf
+map ctrl+a>w kitten kitty-mux/tab_switcher.py 
+```
+
+Then you can use <ctrl+a> as prefix + w to trigger kitty-mux
+
+### Mappings for tmux-like movements and actions
 
 ```conf
 # ~/.config/kitty/kitty.conf
 
 # Window/Tab management
-map ctrl+a>w kitten kitty-mux/tab_switcher.py # use ctrl+a as prefix + w to trigger kitty-mux
 tab_bar_style hidden
 map ctrl+a>$ set_tab_title " "
 enabled_layouts splits:split_axis=horizontal,stack,grid
@@ -63,6 +77,17 @@ map ctrl+a>1 goto_tab 1
 map ctrl+a>2 goto_tab 2
 map ctrl+a>3 goto_tab 3
 ...
+```
+
+### Authorization
+You can provide a [kitty remote control password](https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.remote_control_password) by setting your kitty.conf variables like this:
+```conf
+# ~/.config/kitty/kitty.conf
+
+allow_remote_control password
+remote_control_password YOUR_PASSWORD
+
+map ctrl+a>w kitten kitty-mux/tab_switcher.py --password YOUR_PASSWORD
 ```
 
 
