@@ -23,6 +23,7 @@ parser.add_argument(
     help="remote control password",
 )
 
+
 class TabSwitcher(Handler):
 
     def __init__(self, password: str):
@@ -43,14 +44,17 @@ class TabSwitcher(Handler):
     def initialize(self) -> None:
         self.cmd.set_cursor_visible(False)
         self.draw_screen()
-        self.send_rc_cmd(name='ls', payload=None, encrypter=self.encrypter,
-                         no_response=False)
+        self.send_rc_cmd(name='ls', payload=None,
+                         encrypter=self.encrypter, no_response=False)
         self.cmds.append({'type': 'ls'})
 
     # send remote control command with password option
     def send_rc_cmd(self, name: str, payload: Any, encrypter: CommandEncrypter, no_response=True) -> None:
         send = encrypter(create_basic_command(name, payload, no_response))
         self.write(encode_send(send))
+
+    def windows_filter(self, windows: Dict[str, Any]):
+        return [w for w in windows if ''.join(w['cmdline']).find('kittens.runner') < 0]
 
     # this assumes that communication via kitty cmds in synchronous...
     def on_kitty_cmd_response(self, response: Dict[str, Any]) -> None:
@@ -109,7 +113,10 @@ class TabSwitcher(Handler):
         # recover the last layout of the active tab
         if self.last_active_tab['layout']:
             self.send_rc_cmd(
-                'goto-layout', {'match': f'id:{self.last_active_tab["id"]}', 'layout': f'{self.last_active_tab["layout"]}'}, self.encrypter, no_response=True)
+                'goto-layout',
+                {'match': f'id:{self.last_active_tab["id"]}',
+                 'layout': f'{self.last_active_tab["layout"]}'},
+                self.encrypter, no_response=True)
         self.quit_loop(0)
 
     def on_key_event(self, key_event: KeyEventType, in_bracketed_paste: bool = False) -> None:
@@ -125,7 +132,7 @@ class TabSwitcher(Handler):
         if key_event.key == 'l':
             if self.selected_entry_type == 'tab':
                 tab = self.tabs[self.selected_tab_idx]
-                wins_num = len([w for w in tab['windows'] if w['at_prompt']])
+                wins_num = len(self.windows_filter(tab['windows']))
                 if not tab.get('expanded') and wins_num > 1:
                     tab['expanded'] = True
                     self.draw_screen()
@@ -142,7 +149,7 @@ class TabSwitcher(Handler):
 
         if key_event.key == 'j':
             tab = self.tabs[self.selected_tab_idx]
-            wins_num = len([w for w in tab['windows'] if w['at_prompt']])
+            wins_num = len(self.windows_filter(tab['windows']))
             if tab.get('expanded') and self.selected_win_idx < wins_num - 1:
                 self.selected_entry_type = 'win'
                 self.selected_win_idx += 1
@@ -158,8 +165,8 @@ class TabSwitcher(Handler):
             previous_tab_idx = (self.selected_tab_idx - 1 +
                                 len(self.tabs)) % len(self.tabs)
             previous_tab = self.tabs[previous_tab_idx]
-            previous_tab_wins_num = len([
-                w for w in previous_tab['windows'] if w['at_prompt']])
+            previous_tab_wins_num = len(
+                self.windows_filter(previous_tab['windows']))
             if self.selected_entry_type == 'tab':
                 self.selected_tab_idx = previous_tab_idx
                 if not previous_tab.get('expanded'):
@@ -192,8 +199,7 @@ class TabSwitcher(Handler):
     def switch_to_entry(self) -> None:
         window_id = None
         tab = self.tabs[self.selected_tab_idx]
-        windows = [w for w in tab['windows'] if w['at_prompt']]
-
+        windows = self.windows_filter(tab['windows'])
         if self.selected_entry_type == 'tab':
             if tab['is_active']:
                 self.on_exit()
@@ -202,11 +208,9 @@ class TabSwitcher(Handler):
                 w for w in windows if w['is_active'] or w['is_focused'])['id']
         else:
             window_id = windows[self.selected_win_idx]['id']
-
-        focus_window = create_basic_command(
-            'focus_window', {'match': f'id:{window_id}'}, no_response=True)
-        self.write(encode_send(focus_window))
-        self.on_exit()
+        self.send_rc_cmd('focus-window', {
+                         'match': f'id:{window_id}'}, self.encrypter, no_response=True)
+        self.quit_loop(0)
 
     def draw_screen(self) -> None:
         entry_num = 0
@@ -223,7 +227,7 @@ class TabSwitcher(Handler):
                 active_arrow = '➜'
                 active_group = next(g for g in tab['groups'] if len(
                     g['windows']) > 1)['windows']
-            windows = [w for w in tab['windows'] if w['at_prompt']]
+            windows = self.windows_filter(tab['windows'])
             wins_num = len(windows)
             expanded = tab.get('expanded')
             expand_icon = ' ' if wins_num <= 1 else '' if expanded else ''
@@ -248,8 +252,8 @@ class TabSwitcher(Handler):
         if not self.windows_text:
             return
 
-        wins_by_selected_tab = [
-            w for w in self.tabs[self.selected_tab_idx]['windows'] if w['at_prompt']]
+        wins_by_selected_tab = self.windows_filter(
+            self.tabs[self.selected_tab_idx]['windows'])
         wins_to_display = [wins_by_selected_tab[self.selected_win_idx]] if self.selected_entry_type == 'win' else list(
             islice(wins_by_selected_tab, 0, 4))
         wins_num = len(wins_to_display)
