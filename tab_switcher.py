@@ -13,6 +13,7 @@ from kitty.key_encoding import RELEASE
 from kittens.tui.handler import Handler
 from kittens.tui.loop import Loop
 from kittens.tui.operations import styled, repeat
+from utils import windows_filter
 
 parser = argparse.ArgumentParser(description="kitty-mux")
 parser.add_argument(
@@ -52,9 +53,6 @@ class TabSwitcher(Handler):
     def send_rc_cmd(self, name: str, payload: Any, encrypter: CommandEncrypter, no_response=True) -> None:
         send = encrypter(create_basic_command(name, payload, no_response))
         self.write(encode_send(send))
-
-    def windows_filter(self, windows: Dict[str, Any]):
-        return [w for w in windows if ''.join(w['cmdline']).find('kittens.runner') < 0]
 
     # this assumes that communication via kitty cmds in synchronous...
     def on_kitty_cmd_response(self, response: Dict[str, Any]) -> None:
@@ -132,7 +130,7 @@ class TabSwitcher(Handler):
         if key_event.key == 'l':
             if self.selected_entry_type == 'tab':
                 tab = self.tabs[self.selected_tab_idx]
-                wins_num = len(self.windows_filter(tab['windows']))
+                wins_num = len(windows_filter(tab['windows']))
                 if not tab.get('expanded') and wins_num > 1:
                     tab['expanded'] = True
                     self.draw_screen()
@@ -149,7 +147,7 @@ class TabSwitcher(Handler):
 
         if key_event.key == 'j':
             tab = self.tabs[self.selected_tab_idx]
-            wins_num = len(self.windows_filter(tab['windows']))
+            wins_num = len(windows_filter(tab['windows']))
             if tab.get('expanded') and self.selected_win_idx < wins_num - 1:
                 self.selected_entry_type = 'win'
                 self.selected_win_idx += 1
@@ -166,7 +164,7 @@ class TabSwitcher(Handler):
                                 len(self.tabs)) % len(self.tabs)
             previous_tab = self.tabs[previous_tab_idx]
             previous_tab_wins_num = len(
-                self.windows_filter(previous_tab['windows']))
+                windows_filter(previous_tab['windows']))
             if self.selected_entry_type == 'tab':
                 self.selected_tab_idx = previous_tab_idx
                 if not previous_tab.get('expanded'):
@@ -199,7 +197,7 @@ class TabSwitcher(Handler):
     def switch_to_entry(self) -> None:
         window_id = None
         tab = self.tabs[self.selected_tab_idx]
-        windows = self.windows_filter(tab['windows'])
+        windows = windows_filter(tab['windows'])
         if self.selected_entry_type == 'tab':
             if tab['is_active']:
                 self.on_exit()
@@ -227,7 +225,7 @@ class TabSwitcher(Handler):
                 active_arrow = '➜'
                 active_group = next(g for g in tab['groups'] if len(
                     g['windows']) > 1)['windows']
-            windows = self.windows_filter(tab['windows'])
+            windows = windows_filter(tab['windows'])
             wins_num = len(windows)
             expanded = tab.get('expanded')
             expand_icon = ' ' if wins_num <= 1 else '' if expanded else ''
@@ -252,7 +250,7 @@ class TabSwitcher(Handler):
         if not self.windows_text:
             return
 
-        wins_by_selected_tab = self.windows_filter(
+        wins_by_selected_tab = windows_filter(
             self.tabs[self.selected_tab_idx]['windows'])
         wins_to_display = [wins_by_selected_tab[self.selected_win_idx]] if self.selected_entry_type == 'win' else list(
             islice(wins_by_selected_tab, 0, 4))
