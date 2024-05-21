@@ -239,7 +239,9 @@ class TabSwitcher(Handler):
                     entry_num += 1
                     active_window = active_arrow if w['id'] in active_group else ' '
                     win_name = f'{" "*(len(str(i+1))+ 5)}{active_window} {n+1}: {w["title"]}'
-                    if self.selected_entry_type == 'win' and n == self.selected_win_idx:
+                    if (i == self.selected_tab_idx and
+                            self.selected_entry_type == 'win'
+                            and n == self.selected_win_idx):
                         draw(styled(win_name, bg=8, fg='blue'))
                     else:
                         draw(win_name)
