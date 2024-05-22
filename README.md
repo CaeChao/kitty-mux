@@ -79,6 +79,15 @@ map ctrl+a>3 goto_tab 3
 ...
 ```
 
+### Mappings for tmux-like session save and restore
+
+```conf
+map ctrl+a>ctrl+r combine : launch kitty -1 --session ~/.config/kitty/kitty-mux/kitty-session : detach_window : close_other_os_windows
+map ctrl+a>ctrl+s kitten kitty-mux/save_session.py
+```
+Create mappings like the one above, then you can combine <ctrl+a> as prefix with <ctrl+s> to save your current working session in Kitty, and later restore them from a terminal(I assume you just use kitty as default), by combining <ctrl+a> as prefix with <ctrl+r>.
+
+
 ### Authorization
 You can provide a [kitty remote control password](https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.remote_control_password) by setting your kitty.conf variables like this:
 ```conf
@@ -88,13 +97,15 @@ allow_remote_control password
 remote_control_password YOUR_PASSWORD
 
 map ctrl+a>w kitten kitty-mux/tab_switcher.py --password YOUR_PASSWORD
+
+map ctrl+a>ctrl+s kitten kitty-mux/save_session.py --password YOUR_PASSWORD
 ```
 
 
 ## Features
 
-- [x] Easily view and navigate a list of Tabs, and Windows within Kitty
-- [ ] Save/Restore tabs like sessions in tmux
+- Easily view and navigate a list of Tabs, and Windows within Kitty
+- Save/Restore tabs like sessions in tmux
 
 ## Not Covered
 * OS level windows displaying and switching, since the OS level windows won't be able to run in a single screen by Kitty's design, the management of OS level windows should be the responsibilities of a window manager like [i3](https://i3wm.org), [awesomewm](https://awesomewm.org/), or [yabai](https://github.com/koekeishiya/yabai)(MacOS) combines with a window switcher like [Rofi](https://github.com/davatorium/rofi)
