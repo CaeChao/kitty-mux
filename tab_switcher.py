@@ -2,17 +2,18 @@ import argparse
 import json
 import math
 import re
-
-from os.path import expanduser
 from itertools import islice
-from typing import List, Dict, Any
-from kitty.remote_control import create_basic_command, encode_send, get_pubkey, CommandEncrypter, NoEncryption
-from kitty.typing import KeyEventType
+from os.path import expanduser
+from typing import Any, Dict, List
+
+from kittens.tui.handler import Handler
+from kittens.tui.loop import Loop, debug
+from kittens.tui.operations import repeat, styled
 from kitty.fast_data_types import current_focused_os_window_id
 from kitty.key_encoding import RELEASE
-from kittens.tui.handler import Handler
-from kittens.tui.loop import Loop
-from kittens.tui.operations import styled, repeat
+from kitty.remote_control import CommandEncrypter, NoEncryption, create_basic_command, encode_send, get_pubkey
+from kitty.typing import KeyEventType
+
 from utils import windows_filter
 
 parser = argparse.ArgumentParser(description="kitty-mux")
@@ -32,22 +33,19 @@ class TabSwitcher(Handler):
         self.tabs = []
         self.selected_tab_idx = -1
         self.selected_win_idx = -1
-        self.selected_entry_type = 'tab'
+        self.selected_entry_type = "tab"
         self.cmds = []
         self.windows_text = {}
-        self.last_active_tab = {'id': None, 'layout': None}
-        self.encrypter = CommandEncrypter(
-            pubkey=pubkey,
-            encryption_version=v,
-            password=password
-        ) if password else NoEncryption()
+        self.last_active_tab = {"id": None, "layout": None}
+        self.encrypter = (
+            CommandEncrypter(pubkey=pubkey, encryption_version=v, password=password) if password else NoEncryption()
+        )
 
     def initialize(self) -> None:
         self.cmd.set_cursor_visible(False)
         self.draw_screen()
-        self.send_rc_cmd(name='ls', payload=None,
-                         encrypter=self.encrypter, no_response=False)
-        self.cmds.append({'type': 'ls'})
+        self.send_rc_cmd(name="ls", payload=None, encrypter=self.encrypter, no_response=False)
+        self.cmds.append({"type": "ls"})
 
     # send remote control command with password option
     def send_rc_cmd(self, name: str, payload: Any, encrypter: CommandEncrypter, no_response=True) -> None:
@@ -57,157 +55,159 @@ class TabSwitcher(Handler):
     # this assumes that communication via kitty cmds in synchronous...
     def on_kitty_cmd_response(self, response: Dict[str, Any]) -> None:
         cmd = self.cmds.pop()
-        if cmd['type'] == 'ls':
-            if not response.get('ok'):
-                err = response['error']
-                if response.get('tb'):
-                    err += '\n' + response['tb']
+        if cmd["type"] == "ls":
+            if not response.get("ok"):
+                err = response["error"]
+                if response.get("tb"):
+                    err += "\n" + response["tb"]
                 self.print_on_fail = err
                 self.quit_loop(1)
                 return
-            res = response.get('data')
+            res = response.get("data")
             os_windows = json.loads(res)
-            active_os_window = next(w for w in os_windows if w['is_active'])
-            self.tabs = active_os_window['tabs']
-            active_tab = next(t for t in self.tabs if t['is_active'])
+            active_os_window = next(w for w in os_windows if w["is_active"])
+            self.tabs = active_os_window["tabs"]
+            active_tab = next(t for t in self.tabs if t["is_active"])
             self.selected_tab_idx = self.tabs.index(active_tab)
 
             # change the kitten overlay window to stack layout
-            if active_tab['layout'] != 'stack':
-                self.last_active_tab = {
-                    'id': active_tab['id'],
-                    'layout': active_tab['layout']
-                }
+            if active_tab["layout"] != "stack":
+                self.last_active_tab = {"id": active_tab["id"], "layout": active_tab["layout"]}
                 self.send_rc_cmd(
-                    'goto-layout',
-                    {'match': f'id:{active_tab["id"]}', 'layout': "stack"},
+                    "goto-layout",
+                    {"match": f'id:{active_tab["id"]}', "layout": "stack"},
                     self.encrypter,
-                    no_response=True
+                    no_response=True,
                 )
 
             cmds = []
             for tab in self.tabs:
-                for w in tab['windows']:
-                    wid = w['id']
+                for w in tab["windows"]:
+                    wid = w["id"]
                     self.send_rc_cmd(
-                        'get-text', {'match': f'id:{wid}', 'ansi': True}, self.encrypter, no_response=False)
-                    self.cmds.insert(0, {
-                        'type': 'get-text',
-                        'os_window_id': active_os_window['id'],
-                        'tab_id': tab['id'],
-                        'window_id': wid,
-                    })
+                        "get-text",
+                        {"match": f"id:{wid}", "ansi": True},
+                        self.encrypter,
+                        no_response=False,
+                    )
+                    self.cmds.insert(
+                        0,
+                        {
+                            "type": "get-text",
+                            "os_window_id": active_os_window["id"],
+                            "tab_id": tab["id"],
+                            "window_id": wid,
+                        },
+                    )
             self.cmds = self.cmds + cmds
-            self.draw_screen()
+            # self.draw_screen()
 
-        if cmd['type'] == 'get-text':
+        if cmd["type"] == "get-text":
             # replace tabs with two spaces because having a character that spans multiple columns messes up computations
-            lines = [Ansi(f'{line}') for line in response['data'].replace(
-                '\t', '  ').split('\n')]
-            self.windows_text[cmd['window_id']] = lines
+            lines = [Ansi(f"{line}") for line in response["data"].replace("\t", "  ").split("\n")]
+            self.windows_text[cmd["window_id"]] = lines
             self.draw_screen()
 
     def on_exit(self) -> None:
         # recover the last layout of the active tab
-        if self.last_active_tab['layout']:
+        if self.last_active_tab["layout"]:
             self.send_rc_cmd(
-                'goto-layout',
-                {'match': f'id:{self.last_active_tab["id"]}',
-                 'layout': f'{self.last_active_tab["layout"]}'},
-                self.encrypter, no_response=True)
+                "goto-layout",
+                {
+                    "match": f'id:{self.last_active_tab["id"]}',
+                    "layout": f'{self.last_active_tab["layout"]}',
+                },
+                self.encrypter,
+                no_response=True,
+            )
         self.quit_loop(0)
 
     def on_key_event(self, key_event: KeyEventType, in_bracketed_paste: bool = False) -> None:
         if key_event.type == RELEASE:
             return
 
-        if key_event.matches('esc') or key_event.key == 'q':
+        if key_event.matches("esc") or key_event.key == "q":
             self.on_exit()
 
-        if key_event.matches('enter'):
+        if key_event.matches("enter"):
             self.switch_to_entry()
 
-        if key_event.key == 'l':
-            if self.selected_entry_type == 'tab':
+        if key_event.key == "l":
+            if self.selected_entry_type == "tab":
                 tab = self.tabs[self.selected_tab_idx]
-                wins_num = len(windows_filter(tab['windows']))
-                if not tab.get('expanded') and wins_num > 1:
-                    tab['expanded'] = True
+                wins_num = len(windows_filter(tab["windows"]))
+                if not tab.get("expanded") and wins_num > 1:
+                    tab["expanded"] = True
                     self.draw_screen()
             return
 
-        if key_event.key == 'h':
+        if key_event.key == "h":
             tab = self.tabs[self.selected_tab_idx]
-            if tab.get('expanded'):
-                tab['expanded'] = False
-                self.selected_entry_type = 'tab'
+            if tab.get("expanded"):
+                tab["expanded"] = False
+                self.selected_entry_type = "tab"
                 self.selected_win_idx = -1
                 self.draw_screen()
             return
 
-        if key_event.key == 'j':
+        if key_event.key == "j":
             tab = self.tabs[self.selected_tab_idx]
-            wins_num = len(windows_filter(tab['windows']))
-            if tab.get('expanded') and self.selected_win_idx < wins_num - 1:
-                self.selected_entry_type = 'win'
+            wins_num = len(windows_filter(tab["windows"]))
+            if tab.get("expanded") and self.selected_win_idx < wins_num - 1:
+                self.selected_entry_type = "win"
                 self.selected_win_idx += 1
             else:
-                self.selected_entry_type = 'tab'
-                self.selected_tab_idx = (
-                    self.selected_tab_idx + 1) % len(self.tabs)
+                self.selected_entry_type = "tab"
+                self.selected_tab_idx = (self.selected_tab_idx + 1) % len(self.tabs)
                 self.selected_win_idx = -1
             self.draw_screen()
 
-        if key_event.key == 'k':
+        if key_event.key == "k":
             tab = self.tabs[self.selected_tab_idx]
-            previous_tab_idx = (self.selected_tab_idx - 1 +
-                                len(self.tabs)) % len(self.tabs)
+            previous_tab_idx = (self.selected_tab_idx - 1 + len(self.tabs)) % len(self.tabs)
             previous_tab = self.tabs[previous_tab_idx]
-            previous_tab_wins_num = len(
-                windows_filter(previous_tab['windows']))
-            if self.selected_entry_type == 'tab':
+            previous_tab_wins_num = len(windows_filter(previous_tab["windows"]))
+            if self.selected_entry_type == "tab":
                 self.selected_tab_idx = previous_tab_idx
-                if not previous_tab.get('expanded'):
-                    self.selected_entry_type = 'tab'
+                if not previous_tab.get("expanded"):
+                    self.selected_entry_type = "tab"
                 else:
-                    self.selected_entry_type = 'win'
+                    self.selected_entry_type = "win"
                     self.selected_win_idx = previous_tab_wins_num - 1
             else:
                 if self.selected_win_idx == 0:
-                    self.selected_entry_type = 'tab'
+                    self.selected_entry_type = "tab"
                 else:
-                    self.selected_entry_type = 'win'
+                    self.selected_entry_type = "win"
                 self.selected_win_idx -= 1
             self.draw_screen()
 
-        if key_event.key == 'g':
+        if key_event.key == "g":
             self.selected_tab_idx = 0
-            self.selected_entry_type = 'tab'
+            self.selected_entry_type = "tab"
             self.draw_screen()
 
-        if key_event.matches('shift+g'):
+        if key_event.matches("shift+g"):
             self.selected_tab_idx = len(self.tabs) - 1
-            self.selected_entry_type = 'tab'
+            self.selected_entry_type = "tab"
             tab = self.tabs[self.selected_tab_idx]
-            if tab.get('expanded'):
-                self.selected_entry_type = 'win'
-                self.selected_win_idx = len(tab['windows']) - 1
+            if tab.get("expanded"):
+                self.selected_entry_type = "win"
+                self.selected_win_idx = len(tab["windows"]) - 1
             self.draw_screen()
 
     def switch_to_entry(self) -> None:
         window_id = None
         tab = self.tabs[self.selected_tab_idx]
-        windows = windows_filter(tab['windows'])
-        if self.selected_entry_type == 'tab':
-            if tab['is_active']:
+        windows = windows_filter(tab["windows"])
+        if self.selected_entry_type == "tab":
+            if tab["is_active"]:
                 self.on_exit()
                 return
-            window_id = next(
-                w for w in windows if w['is_active'] or w['is_focused'])['id']
+            window_id = next(w for w in windows if w["is_active"] or w["is_focused"])["id"]
         else:
-            window_id = windows[self.selected_win_idx]['id']
-        self.send_rc_cmd('focus-window', {
-                         'match': f'id:{window_id}'}, self.encrypter, no_response=True)
+            window_id = windows[self.selected_win_idx]["id"]
+        self.send_rc_cmd("focus-window", {"match": f"id:{window_id}"}, self.encrypter, no_response=True)
         self.quit_loop(0)
 
     def draw_screen(self) -> None:
@@ -218,31 +218,28 @@ class TabSwitcher(Handler):
             return
         for i, tab in enumerate(self.tabs):
             entry_num += 1
-            tid = tab['id']
-            active_arrow = ' '
+            tid = tab["id"]
+            active_arrow = " "
             active_group = []
-            if tab['is_active']:
-                active_arrow = '➜'
-                active_group = next(g for g in tab['groups'] if len(
-                    g['windows']) > 1)['windows']
-            windows = windows_filter(tab['windows'])
+            if tab["is_active"]:
+                active_arrow = "➜"
+                active_group = next(g for g in tab["groups"] if len(g["windows"]) > 1)["windows"]
+            windows = windows_filter(tab["windows"])
             wins_num = len(windows)
-            expanded = tab.get('expanded')
-            expand_icon = ' ' if wins_num <= 1 else '' if expanded else ''
+            expanded = tab.get("expanded")
+            expand_icon = " " if wins_num <= 1 else "" if expanded else ""
             tab_name = f'({i+1}) {active_arrow} {tab["title"]} - {wins_num} windows {expand_icon}'
-            if self.selected_entry_type == 'tab' and i == self.selected_tab_idx:
-                draw(styled(tab_name, bg=8, fg='blue'))
+            if self.selected_entry_type == "tab" and i == self.selected_tab_idx:
+                draw(styled(tab_name, bg=8, fg="blue"))
             else:
                 draw(tab_name)
             if expanded:
                 for n, w in enumerate(windows):
                     entry_num += 1
-                    active_window = active_arrow if w['id'] in active_group else ' '
+                    active_window = active_arrow if w["id"] in active_group else " "
                     win_name = f'{" "*(len(str(i+1))+ 5)}{active_window} {n+1}: {w["title"]}'
-                    if (i == self.selected_tab_idx and
-                            self.selected_entry_type == 'win'
-                            and n == self.selected_win_idx):
-                        draw(styled(win_name, bg=8, fg='blue'))
+                    if i == self.selected_tab_idx and self.selected_entry_type == "win" and n == self.selected_win_idx:
+                        draw(styled(win_name, bg=8, fg="blue"))
                     else:
                         draw(win_name)
 
@@ -252,52 +249,52 @@ class TabSwitcher(Handler):
         if not self.windows_text:
             return
 
-        wins_by_selected_tab = windows_filter(
-            self.tabs[self.selected_tab_idx]['windows'])
-        wins_to_display = [wins_by_selected_tab[self.selected_win_idx]] if self.selected_entry_type == 'win' else list(
-            islice(wins_by_selected_tab, 0, 4))
+        wins_by_selected_tab = windows_filter(self.tabs[self.selected_tab_idx]["windows"])
+        wins_to_display = (
+            [wins_by_selected_tab[self.selected_win_idx]]
+            if self.selected_entry_type == "win"
+            else list(islice(wins_by_selected_tab, 0, 4))
+        )
         wins_num = len(wins_to_display)
         win_height = math.floor(self.screen_size.rows / 2 - 2)
 
         # 2 for borders, 1 for the tab_bar
         for _ in range(self.screen_size.rows - entry_num - win_height - 2 - 1):
-            draw('')
+            draw("")
 
         def print_horizontal_border(left_corner: str, middle_corner: str, right_corner: str):
             border = left_corner
-            for idx, win in enumerate(wins_to_display):
-                width = tab_width(self.screen_size.cols, wins_num, idx)
-                border += repeat('─', width)
-                if (idx < wins_num - 1):
+            for idx in range(wins_num):
+                width = window_width(self.screen_size.cols, wins_num, idx)
+                border += repeat("─", width)
+                if idx < wins_num - 1:
                     border += middle_corner
                 else:
                     border += right_corner
             draw(border)
 
-        print_horizontal_border('┌', '┬', '┐')
+        print_horizontal_border("┌", "┬", "┐")
 
         # messy code for window preview display
         lines_by_win = []
         for idx, win in enumerate(wins_to_display):
             new_line = []
-            lines = self.windows_text.get(win['id'], '')
-            width = tab_width(self.screen_size.cols, wins_num, idx)
+            lines = self.windows_text.get(win["id"], "")
+            width = window_width(self.screen_size.cols, wins_num, idx)
             for line in islice(lines, 0, win_height):
                 new_line.append(line.slice(width - 2).ljust(width - 2))
             lines_by_win.append(new_line)
 
         for line in zip(*lines_by_win):
-            draw('│ ' + '\x1b[0m │ '.join([l.get_raw_text()
-                                           for l in line]) + ' \x1b[0m│')
+            draw("│ " + "\x1b[0m │ ".join([l.get_raw_text() for l in line]) + " \x1b[0m│")
 
-        print_horizontal_border('└', '┴', '┘')
+        print_horizontal_border("└", "┴", "┘")
 
 
 # Ansi escaping mostly stolen from
 # https://github.com/getcuia/stransi/blob/main/src/stransi/
 
-PATTERN = re.compile(
-    r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
+PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
 # ansi--^     shell prompt OSC 133--^
 
 
@@ -307,26 +304,26 @@ class Ansi:
         self.parsed = list(parse_ansi_colors(self.raw_text))
 
     def __str__(self):
-        return f'Ansi({[str(c) for c in self.parsed]}, {self.raw_text})'
+        return f"Ansi({[str(c) for c in self.parsed]}, {self.raw_text})"
 
     def get_raw_text(self):
         return self.raw_text
 
     def slice(self, n):
         chars = 0
-        text = ''
+        text = ""
         for token in self.parsed:
             if isinstance(token, EscapeSequence):
                 text += token.get_sequence()
             else:
-                sliced = token[:n - chars]
+                sliced = token[: n - chars]
                 text += sliced
                 chars += len(sliced)
         return Ansi(text)
 
     def ljust(self, n):
         chars = 0
-        text = ''
+        text = ""
         for token in self.parsed:
             if isinstance(token, EscapeSequence):
                 text += token.get_sequence()
@@ -334,7 +331,7 @@ class Ansi:
                 text += token
                 chars += len(token)
         for i in range(0, n - chars):
-            text += ' '
+            text += " "
         return Ansi(text)
 
 
@@ -343,7 +340,7 @@ class EscapeSequence:
         self.sequence = sequence
 
     def __str__(self):
-        return f'EscapeSequence({self.sequence})'
+        return f"EscapeSequence({self.sequence})"
 
     def get_sequence(self):
         return self.sequence
@@ -353,7 +350,7 @@ def parse_ansi_colors(text: str):
     prev_end = 0
     for match in re.finditer(PATTERN, text):
         # Yield the text before escape sequence.
-        yield text[prev_end: match.start()]
+        yield text[prev_end : match.start()]
 
         if escape_sequence := match.group(0):
             yield EscapeSequence(escape_sequence)
@@ -364,18 +361,15 @@ def parse_ansi_colors(text: str):
     # Yield the text after the last escape sequence.
     yield text[prev_end:]
 
+
 # the last tab must sometimes be padded by 1 column so that the preview fits the whole width
-
-
-def tab_width(cols, tab_count, idx):
-    border_count = tab_count + 1
-    tab_width = math.floor((cols - border_count)/tab_count)
-    if tab_count == 1:
-        return tab_width
-    if idx == tab_count - 1 and tab_count % 2 == cols % 2:
-        return tab_width + 1
+def window_width(cols, win_count, idx):
+    border_count = win_count + 1
+    win_width = math.floor((cols - border_count) / win_count)
+    if idx == win_count - 1 and win_count % 2 == cols % 2 and win_count > 1:
+        return win_width + 1
     else:
-        return tab_width
+        return win_width
 
 
 def main(args: List[str]) -> str:
