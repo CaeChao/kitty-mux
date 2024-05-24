@@ -1,0 +1,3 @@
+[submodule "wcwidth"]
+	path = wcwidth
+	url = https://github.com/jquast/wcwidth

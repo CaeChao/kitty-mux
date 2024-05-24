@@ -1,20 +1,17 @@
 import argparse
 import json
 import math
-import re
 from itertools import islice
-from os.path import expanduser
 from typing import Any, Dict, List
 
 from kittens.tui.handler import Handler
-from kittens.tui.loop import Loop, debug
+from kittens.tui.loop import Loop
 from kittens.tui.operations import repeat, styled
-from kitty.fast_data_types import current_focused_os_window_id
 from kitty.key_encoding import RELEASE
 from kitty.remote_control import CommandEncrypter, NoEncryption, create_basic_command, encode_send, get_pubkey
 from kitty.typing import KeyEventType
 
-from utils import windows_filter
+from utils import Ansi, windows_filter
 
 parser = argparse.ArgumentParser(description="kitty-mux")
 parser.add_argument(
@@ -218,7 +215,6 @@ class TabSwitcher(Handler):
             return
         for i, tab in enumerate(self.tabs):
             entry_num += 1
-            tid = tab["id"]
             active_arrow = " "
             active_group = []
             if tab["is_active"]:
@@ -229,19 +225,27 @@ class TabSwitcher(Handler):
             expanded = tab.get("expanded")
             expand_icon = " " if wins_num <= 1 else "" if expanded else ""
             tab_name = f'({i+1}) {active_arrow} {tab["title"]} - {wins_num} windows {expand_icon}'
-            if self.selected_entry_type == "tab" and i == self.selected_tab_idx:
-                draw(styled(tab_name, bg=8, fg="blue"))
-            else:
-                draw(tab_name)
+            # Draw tab entries
+            tab_entry = (
+                styled(tab_name, bg=8, fg="blue")
+                if self.selected_entry_type == "tab" and i == self.selected_tab_idx
+                else tab_name
+            )
+            draw(tab_entry)
+            # Draw window entries if tab expanded
             if expanded:
                 for n, w in enumerate(windows):
                     entry_num += 1
                     active_window = active_arrow if w["id"] in active_group else " "
                     win_name = f'{" "*(len(str(i+1))+ 5)}{active_window} {n+1}: {w["title"]}'
-                    if i == self.selected_tab_idx and self.selected_entry_type == "win" and n == self.selected_win_idx:
-                        draw(styled(win_name, bg=8, fg="blue"))
-                    else:
-                        draw(win_name)
+                    win_entry = (
+                        styled(win_name, bg=8, fg="blue")
+                        if i == self.selected_tab_idx
+                        and self.selected_entry_type == "win"
+                        and n == self.selected_win_idx
+                        else win_name
+                    )
+                    draw(win_entry)
 
         # don't draw anything if we have nothing to show, otherwise we can see the borders for
         # a couple of ms. this is an approximation since we might get some text data for another
@@ -282,84 +286,14 @@ class TabSwitcher(Handler):
             lines = self.windows_text.get(win["id"], "")
             width = window_width(self.screen_size.cols, wins_num, idx)
             for line in islice(lines, 0, win_height):
-                new_line.append(line.slice(width - 2).ljust(width - 2))
+                line = line.slice(width - 2).ljust(width - 2)
+                new_line.append(line)
             lines_by_win.append(new_line)
 
         for line in zip(*lines_by_win):
             draw("│ " + "\x1b[0m │ ".join([l.get_raw_text() for l in line]) + " \x1b[0m│")
 
         print_horizontal_border("└", "┴", "┘")
-
-
-# Ansi escaping mostly stolen from
-# https://github.com/getcuia/stransi/blob/main/src/stransi/
-
-PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
-# ansi--^     shell prompt OSC 133--^
-
-
-class Ansi:
-    def __init__(self, text):
-        self.raw_text = text
-        self.parsed = list(parse_ansi_colors(self.raw_text))
-
-    def __str__(self):
-        return f"Ansi({[str(c) for c in self.parsed]}, {self.raw_text})"
-
-    def get_raw_text(self):
-        return self.raw_text
-
-    def slice(self, n):
-        chars = 0
-        text = ""
-        for token in self.parsed:
-            if isinstance(token, EscapeSequence):
-                text += token.get_sequence()
-            else:
-                sliced = token[: n - chars]
-                text += sliced
-                chars += len(sliced)
-        return Ansi(text)
-
-    def ljust(self, n):
-        chars = 0
-        text = ""
-        for token in self.parsed:
-            if isinstance(token, EscapeSequence):
-                text += token.get_sequence()
-            else:
-                text += token
-                chars += len(token)
-        for i in range(0, n - chars):
-            text += " "
-        return Ansi(text)
-
-
-class EscapeSequence:
-    def __init__(self, sequence: str):
-        self.sequence = sequence
-
-    def __str__(self):
-        return f"EscapeSequence({self.sequence})"
-
-    def get_sequence(self):
-        return self.sequence
-
-
-def parse_ansi_colors(text: str):
-    prev_end = 0
-    for match in re.finditer(PATTERN, text):
-        # Yield the text before escape sequence.
-        yield text[prev_end : match.start()]
-
-        if escape_sequence := match.group(0):
-            yield EscapeSequence(escape_sequence)
-
-        # Update the start position.
-        prev_end = match.end()
-
-    # Yield the text after the last escape sequence.
-    yield text[prev_end:]
 
 
 # the last tab must sometimes be padded by 1 column so that the preview fits the whole width
