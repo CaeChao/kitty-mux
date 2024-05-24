@@ -100,8 +100,10 @@ class TabSwitcher(Handler):
             # self.draw_screen()
 
         if cmd["type"] == "get-text":
-            # replace tabs with two spaces because having a character that spans multiple columns messes up computations
-            lines = [Ansi(f"{line}") for line in response["data"].replace("\t", "  ").split("\n")]
+            # replace tabs with two spaces because having a character that spans multiple columns messes up computations, and replace '\x1b[m' with \n in order to break lines
+            lines = [
+                Ansi(f"{line}") for line in response["data"].replace("\x1b[m", "\n").replace("\t", "  ").split("\n")
+            ]
             self.windows_text[cmd["window_id"]] = lines
             self.draw_screen()
 
