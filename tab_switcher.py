@@ -1,6 +1,7 @@
 import argparse
 import json
 import math
+import re
 from itertools import islice
 from typing import Any, Dict, List
 
@@ -102,7 +103,8 @@ class TabSwitcher(Handler):
         if cmd["type"] == "get-text":
             # replace tabs with two spaces because having a character that spans multiple columns messes up computations, and replace '\x1b[m' with \n in order to break lines
             lines = [
-                Ansi(f"{line}") for line in response["data"].replace("\x1b[m", "\n").replace("\t", "  ").split("\n")
+                Ansi(f"{line}")
+                for line in re.sub(r"[\r\n]*(\x1b\[m)", "\n", response["data"]).replace("\t", "  ").split("\n")
             ]
             self.windows_text[cmd["window_id"]] = lines
             self.draw_screen()
