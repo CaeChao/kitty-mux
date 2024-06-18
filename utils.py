@@ -5,7 +5,7 @@ from wcwidth.wcwidth import wcswidth
 
 
 def windows_filter(windows: Dict[str, Any]):
-    return [w for w in windows if "".join(w["cmdline"]).find("kittens.runner") < 0]
+    return [w for w in windows if w["env"].get("KITTY_SHELL_INTEGRATION") == "enabled"]
 
 
 # Ansi escaping mostly stolen from
@@ -51,7 +51,7 @@ class Ansi:
                 # recompute the real width of characters
                 real_n = n + len(token) - wcswidth(token) - chars
                 if real_n > 0:
-                    sliced = token[: real_n]
+                    sliced = token[:real_n]
                     text += sliced
                     chars += wcswidth(sliced)
         return Ansi(text)
