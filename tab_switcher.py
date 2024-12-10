@@ -222,12 +222,12 @@ class TabSwitcher(Handler):
             active_arrow = " "
             active_group = []
             if tab["is_active"]:
-                active_arrow = "➜"
+                active_arrow = "➤"
                 active_group = next(g for g in tab["groups"] if len(g["windows"]) > 1)["windows"]
             windows = windows_filter(tab["windows"])
             wins_num = len(windows)
             expanded = tab.get("expanded")
-            expand_icon = " " if wins_num <= 1 else "" if expanded else ""
+            expand_icon = " " if wins_num <= 1 else " " if expanded else " "
             tab_name = f'({i+1}) {active_arrow} {tab["title"]} - {wins_num} windows {expand_icon}'
             # Draw tab entries
             tab_entry = (

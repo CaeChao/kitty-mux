@@ -8,21 +8,20 @@ def windows_filter(windows: Dict[str, Any]):
     return [w for w in windows if w["env"].get("KITTY_SHELL_INTEGRATION") == "enabled"]
 
 
-# Ansi escaping mostly stolen from
-# https://github.com/getcuia/stransi/blob/main/src/stransi/
-
-PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
-# ansi--^     shell prompt OSC 133--^
-
-
 class Ansi:
+    # Ansi escaping mostly stolen from
+    # https://github.com/getcuia/stransi/blob/main/src/stransi/
+
+    PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
+    # ansi--^     shell prompt OSC 133--^
+
     def __init__(self, text):
         self.raw_text = text
         self.parsed = list(self.parse_ansi_colors(self.raw_text))
 
     def parse_ansi_colors(self, text: str):
         prev_end = 0
-        for match in re.finditer(PATTERN, text):
+        for match in re.finditer(self.PATTERN, text):
             # Yield the text before escape sequence.
             yield text[prev_end : match.start()]
 
@@ -65,8 +64,7 @@ class Ansi:
             else:
                 text += token
                 chars += wcswidth(token)
-        for _ in range(0, n - chars):
-            text += " "
+        text += " " * (n - chars)
         return Ansi(text)
 
 
