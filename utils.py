@@ -12,8 +12,10 @@ class Ansi:
     # Ansi escaping mostly stolen from
     # https://github.com/getcuia/stransi/blob/main/src/stransi/
 
-    PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
+    # PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\]133;[A-Z]\N{ESC}\\)")
+    PATTERN = re.compile(r"(\N{ESC}\[[\d;|:]*[a-zA-Z]|\N{ESC}\][\d;]*[^\\]*\N{ESC}\\)")
     # ansi--^     shell prompt OSC 133--^
+    # OSC 8 protocol for hyperlink: \x1b]8;;HYPERLINK\x1b\\
 
     def __init__(self, text):
         self.raw_text = text
