@@ -12,7 +12,7 @@ This is a tool to give kitty the similar features. The idea is to bind a hotkey 
 ## Installation
 
 > [!IMPORTANT]
-> This plugin requires kitty v0.30.0 or higher.
+> This plugin requires kitty v0.42.0 or higher.
 
 ```sh
 git clone git@github.com:CaeChao/kitty-mux.git ~/.config/kitty/kitty-mux

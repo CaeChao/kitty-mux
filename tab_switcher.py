@@ -10,7 +10,7 @@ from kittens.tui.loop import Loop
 from kittens.tui.operations import repeat, styled
 from kitty.key_encoding import RELEASE
 from kitty.remote_control import CommandEncrypter, NoEncryption, create_basic_command, encode_send, get_pubkey
-from kitty.typing import KeyEventType
+from kitty.typing_compat import KeyEventType
 
 from utils import Ansi, windows_filter
 
