@@ -300,17 +300,18 @@ class TabSwitcher(Handler):
         print_horizontal_border("└", "┴", "┘")
 
 
-# the last tab must sometimes be padded by 1 column so that the preview fits the whole width
 def window_width(cols, win_count, idx):
     border_count = win_count + 1
     win_width = math.floor((cols - border_count) / win_count)
-    if idx == win_count - 1 and win_count % 2 == cols % 2 and win_count > 1:
-        return win_width + 1
-    else:
-        return win_width
+    return win_width
+    # the last tab must sometimes be padded by 1 column so that the preview fits the whole width# INFO: no need in newest kitty version
+    # if idx == win_count - 1 and win_count % 2 == cols % 2 and win_count > 1:
+    #     return win_width + 1
+    # else:
+    #     return win_width
 
 
-def main(args: List[str]) -> str:
+def main(args: List[str]) -> None:
     loop = Loop()
     opts = parser.parse_args(args[1:])
     handler = TabSwitcher(opts.password[0])
